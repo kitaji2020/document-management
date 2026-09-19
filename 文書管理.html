@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文書管理システム</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f4f5f7; --surface: #ffffff;
+    --sidebar-bg: #1e2535; --sidebar-text: #a8b3cc; --sidebar-active: #ffffff; --sidebar-hover: #2a3347;
+    --primary: #4f6ef7; --primary-dark: #3a56d4;
+    --text: #1a1d23; --text-muted: #6b7280; --border: #e5e7eb; --radius: 8px;
+    --status-draft-bg: #f3f4f6; --status-draft-text: #6b7280;
+    --status-pending-bg: #fef3c7; --status-pending-text: #92400e;
+    --status-approved-bg: #d1fae5; --status-approved-text: #065f46;
+    --status-rejected-bg: #fee2e2; --status-rejected-text: #991b1b;
+  }
+
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+
+  #sidebar { width: 220px; flex-shrink: 0; background: var(--sidebar-bg); display: flex; flex-direction: column; overflow: hidden; }
+  #sidebar-logo { padding: 20px 16px 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  #sidebar-logo h1 { font-size: 15px; font-weight: 700; color: #fff; line-height: 1.3; }
+  #sidebar-logo p { font-size: 11px; color: var(--sidebar-text); margin-top: 2px; }
+  #role-box { margin: 12px 12px 0; background: rgba(255,255,255,.06); border-radius: var(--radius); padding: 10px 12px; }
+  #role-box label { font-size: 10px; color: var(--sidebar-text); text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 6px; }
+  #role-select { width: 100%; background: rgba(255,255,255,.12); border: none; color: #fff; padding: 6px 8px; border-radius: 5px; font-size: 13px; cursor: pointer; }
+  #role-select option { background: #1e2535; }
+  #sidebar-nav { padding: 16px 8px; flex: 1; }
+  .nav-section-label { font-size: 10px; color: var(--sidebar-text); text-transform: uppercase; letter-spacing: .06em; padding: 0 8px 6px; margin-top: 8px; }
+  .nav-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: none; background: none; color: var(--sidebar-text); font-size: 13px; cursor: pointer; border-radius: 6px; text-align: left; transition: background .15s, color .15s; }
+  .nav-btn:hover { background: var(--sidebar-hover); color: var(--sidebar-active); }
+  .nav-btn.active { background: var(--primary); color: #fff; }
+  .nav-btn svg { flex-shrink: 0; width: 16px; height: 16px; }
+  #sidebar-stats { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,.06); font-size: 11px; color: var(--sidebar-text); }
+  .stat-row { display: flex; justify-content: space-between; padding: 2px 0; }
+  .stat-val { color: #fff; font-weight: 600; }
+
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  #topbar-title { font-size: 17px; font-weight: 700; }
+  #topbar-actions { display: flex; gap: 8px; }
+  #content { flex: 1; overflow-y: auto; padding: 24px; }
+
+  .btn { padding: 8px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 6px; transition: opacity .15s, transform .1s; }
+  .btn:active { transform: scale(.98); }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: #e9ecef; }
+  .btn-success { background: #059669; color: #fff; }
+  .btn-success:hover { background: #047857; }
+  .btn-danger { background: #dc2626; color: #fff; }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn-sm { padding: 5px 11px; font-size: 12px; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .tabs { display: flex; gap: 2px; margin-bottom: 20px; background: var(--surface); padding: 4px; border-radius: var(--radius); border: 1px solid var(--border); width: fit-content; }
+  .tab { padding: 6px 14px; border-radius: 5px; font-size: 13px; cursor: pointer; border: none; background: none; color: var(--text-muted); font-weight: 500; transition: background .15s, color .15s; display: flex; align-items: center; gap: 5px; }
+  .tab.active { background: var(--primary); color: #fff; }
+  .tab:hover:not(.active) { background: var(--bg); color: var(--text); }
+  .tab-count { font-size: 11px; background: rgba(0,0,0,.1); padding: 1px 6px; border-radius: 99px; }
+  .tab.active .tab-count { background: rgba(255,255,255,.25); }
+
+  #doc-list { display: flex; flex-direction: column; gap: 10px; }
+  .doc-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; cursor: pointer; transition: box-shadow .15s, border-color .15s; display: flex; align-items: flex-start; gap: 14px; }
+  .doc-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.08); border-color: #c0c8d8; }
+  .doc-card-icon { flex-shrink: 0; width: 36px; height: 36px; background: var(--bg); border-radius: 8px; display: grid; place-items: center; }
+  .doc-card-body { flex: 1; min-width: 0; }
+  .doc-card-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .doc-card-meta { font-size: 12px; color: var(--text-muted); display: flex; gap: 12px; flex-wrap: wrap; }
+  .doc-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+  .empty-state { text-align: center; padding: 60px 0; color: var(--text-muted); }
+  .empty-state p { font-size: 15px; }
+  .empty-state small { font-size: 13px; }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+  .badge-draft { background: var(--status-draft-bg); color: var(--status-draft-text); }
+  .badge-pending { background: var(--status-pending-bg); color: var(--status-pending-text); }
+  .badge-approved { background: var(--status-approved-bg); color: var(--status-approved-text); }
+  .badge-rejected { background: var(--status-rejected-bg); color: var(--status-rejected-text); }
+
+  .search-bar { position: relative; margin-bottom: 16px; }
+  .search-bar input { width: 100%; padding: 9px 12px 9px 36px; border: 1.5px solid var(--border); border-radius: var(--radius); font-size: 14px; font-family: inherit; background: var(--surface); color: var(--text); transition: border-color .15s; }
+  .search-bar input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,.12); }
+  .search-bar-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+  .search-bar-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 16px; line-height: 1; padding: 2px 4px; border-radius: 4px; display: none; }
+  .search-bar input:not(:placeholder-shown) ~ .search-bar-clear { display: block; }
+  mark { background: #fef08a; color: inherit; border-radius: 2px; padding: 0 1px; }
+  .search-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+
+  .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; max-width: 720px; }
+  .form-title { font-size: 18px; font-weight: 700; margin-bottom: 24px; }
+  .form-group { margin-bottom: 18px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: var(--radius); font-size: 14px; font-family: inherit; background: var(--surface); color: var(--text); transition: border-color .15s; }
+  .form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,110,247,.12); }
+  .form-group textarea { min-height: 180px; resize: vertical; }
+  .form-row { display: flex; gap: 16px; }
+  .form-row .form-group { flex: 1; }
+  .form-actions { display: flex; gap: 10px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+
+  .drop-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 24px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; background: var(--bg); position: relative; }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--primary); background: rgba(79,110,247,.04); }
+  .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-zone-icon { font-size: 28px; margin-bottom: 6px; }
+  .drop-zone-text { font-size: 13px; color: var(--text-muted); }
+  .drop-zone-text strong { color: var(--primary); }
+  .drop-zone-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  #pending-files { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .file-item { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; }
+  .file-item-icon { font-size: 20px; flex-shrink: 0; line-height: 1; }
+  .file-item-info { flex: 1; min-width: 0; }
+  .file-item-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-item-size { font-size: 11px; color: var(--text-muted); }
+  .file-item-remove { flex-shrink: 0; background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 16px; padding: 2px 4px; border-radius: 4px; line-height: 1; transition: color .15s; }
+  .file-item-remove:hover { color: #dc2626; background: #fee2e2; }
+  .file-item-download { flex-shrink: 0; font-size: 11px; font-weight: 600; color: var(--primary); text-decoration: none; padding: 3px 8px; border-radius: 4px; background: rgba(79,110,247,.08); white-space: nowrap; }
+  .file-item-download:hover { background: rgba(79,110,247,.16); }
+  .file-item-progress { flex-shrink: 0; width: 14px; height: 14px; border: 2px solid var(--primary); border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); max-width: 800px; overflow: hidden; }
+  .detail-header { padding: 24px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .detail-header-left { flex: 1; }
+  .detail-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .detail-meta { font-size: 12px; color: var(--text-muted); display: flex; gap: 14px; flex-wrap: wrap; }
+  .detail-body { padding: 24px 28px; }
+  .detail-content { font-size: 14px; line-height: 1.75; white-space: pre-wrap; color: var(--text); background: var(--bg); border-radius: var(--radius); padding: 16px; min-height: 120px; }
+  .detail-section { margin-bottom: 20px; }
+  .detail-section h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 8px; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .info-item { background: var(--bg); border-radius: 6px; padding: 10px 14px; }
+  .info-item .key { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-bottom: 2px; }
+  .info-item .val { font-size: 13px; font-weight: 600; }
+  .approval-box { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px; }
+  .approval-box h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+  .approval-comment { background: var(--bg); border-radius: 6px; padding: 12px; font-size: 13px; color: var(--text-muted); font-style: italic; margin-top: 8px; }
+  .action-bar { background: var(--surface); border-top: 1px solid var(--border); padding: 16px 28px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .action-bar-info { flex: 1; font-size: 13px; color: var(--text-muted); }
+  .attach-list { display: flex; flex-direction: column; gap: 6px; }
+  .attach-empty { font-size: 13px; color: var(--text-muted); font-style: italic; }
+
+  #toast-container { position: fixed; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 9999; }
+  .toast { background: #1e2535; color: #fff; padding: 12px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; box-shadow: 0 4px 16px rgba(0,0,0,.2); animation: slide-in .2s ease; display: flex; align-items: center; gap: 8px; }
+  .toast.success { border-left: 3px solid #34d399; }
+  .toast.error   { border-left: 3px solid #f87171; }
+  .toast.warn    { border-left: 3px solid #f59e0b; }
+  @keyframes slide-in { from { opacity:0; transform: translateX(16px); } to { opacity:1; transform: none; } }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: grid; place-items: center; z-index: 1000; animation: fade-in .15s ease; }
+  @keyframes fade-in { from { opacity:0; } }
+  .modal { background: var(--surface); border-radius: 12px; padding: 28px; width: 460px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .modal p { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-logo">
+    <h1>文書管理システム</h1>
+    <p>Document Management</p>
+  </div>
+  <div id="role-box">
+    <label>現在のロール</label>
+    <select id="role-select" onchange="setRole(this.value)">
+      <option value="submitter">起案者</option>
+      <option value="approver">承認者</option>
+    </select>
+  </div>
+  <nav id="sidebar-nav">
+    <div class="nav-section-label">メニュー</div>
+    <button class="nav-btn active" id="nav-list" onclick="showView('list')">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M5 3h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 2v10h10V5H5zm2 2h6v1H7V7zm0 3h6v1H7v-1zm0 3h4v1H7v-1z"/></svg>
+      文書一覧
+    </button>
+    <button class="nav-btn" id="nav-new" onclick="showView('new')">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 10-2 0v6H3a1 1 0 100 2h6v6a1 1 0 102 0v-6h6a1 1 0 100-2h-6V3z"/></svg>
+      新規作成
+    </button>
+    <button class="nav-btn" id="nav-pending" onclick="filterPending()">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm1 4a1 1 0 10-2 0v4l2.5 2.5a1 1 0 101.41-1.41L11 9.17V6z"/></svg>
+      承認待ち
+      <span id="pending-badge" style="margin-left:auto;background:#f59e0b;color:#fff;font-size:10px;padding:1px 7px;border-radius:99px;font-weight:700;display:none">0</span>
+    </button>
+  </nav>
+  <div id="sidebar-stats">
+    <div class="stat-row"><span>合計文書</span><span class="stat-val" id="stat-total">0</span></div>
+    <div class="stat-row"><span>承認済み</span><span class="stat-val" id="stat-approved">0</span></div>
+    <div class="stat-row"><span>承認待ち</span><span class="stat-val" id="stat-pending">0</span></div>
+    <div class="stat-row"><span>却下</span><span class="stat-val" id="stat-rejected">0</span></div>
+    <div class="stat-row" style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06)">
+      <span>ストレージ</span><span class="stat-val" id="stat-storage">— KB</span>
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="topbar">
+    <div id="topbar-title">文書一覧</div>
+    <div id="topbar-actions"></div>
+  </div>
+  <div id="content"></div>
+</div>
+<div id="toast-container"></div>
+
+<script>
+let docs = JSON.parse(localStorage.getItem('docs') || '[]');
+let role = 'submitter';
+let currentView = 'list';
+let currentFilter = 'all';
+let searchQuery = '';
+let editingId = null;
+let pendingAttachments = [];
+let removedAttachmentIds = [];
+
+const STATUS_LABEL = { draft:'下書き', pending:'承認待ち', approved:'承認済み', rejected:'却下' };
+const STATUS_BADGE = { draft:'badge-draft', pending:'badge-pending', approved:'badge-approved', rejected:'badge-rejected' };
+const CATEGORIES = ['契約書','稟議書','報告書','提案書','議事録','規程','その他'];
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+function save() { localStorage.setItem('docs', JSON.stringify(docs)); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function fmt(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'})
+       + ' ' + d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+}
+function fmtSize(b) {
+  return b < 1024 ? b+' B' : b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(1)+' MB';
+}
+function fileIcon(t) {
+  if (!t) return '📄';
+  if (t.startsWith('image/')) return '🖼️';
+  if (t === 'application/pdf') return '📕';
+  if (t.includes('word')||t.includes('document')) return '📘';
+  if (t.includes('excel')||t.includes('spreadsheet')||t.includes('csv')) return '📗';
+  if (t.includes('powerpoint')||t.includes('presentation')) return '📙';
+  if (t.startsWith('text/')) return '📄';
+  if (t.includes('zip')||t.includes('archive')) return '📦';
+  return '📎';
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function highlight(s, q) {
+  if (!q) return esc(s);
+  return esc(s).replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'), m=>`<mark>${m}</mark>`);
+}
+function matchesSearch(d, q) {
+  if (!q) return true;
+  const l = q.toLowerCase();
+  return [d.title, d.content, d.author, d.category, d.approver||'',
+          ...(d.attachments||[]).map(a=>a.name)]
+    .some(s => String(s||'').toLowerCase().includes(l));
+}
+
+function storageSizeKB() {
+  try { return Math.round((localStorage.getItem('docs')||'').length / 1024); } catch { return 0; }
+}
+function saveWithErrorHandling() {
+  try {
+    save();
+    return true;
+  } catch(e) {
+    console.error('Save error:', e);
+    const isQuota = e instanceof DOMException &&
+      (e.code === 22 || e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+    if (isQuota) {
+      toast(`ストレージ容量不足です（現在 ${storageSizeKB()} KB 使用中）。不要な文書を削除してください。`, 'error');
+    } else {
+      toast(`保存に失敗しました: ${e.message}`, 'error');
+    }
+    return false;
+  }
+}
+
+// ── Navigation ─────────────────────────────────
+function setRole(v) {
+  role = v; updateSidebar();
+  if (currentView === 'list') showList();
+  else if (currentView === 'detail') { const el = document.querySelector('[data-doc-id]'); if (el) showDetail(el.dataset.docId); else showList(); }
+}
+function showView(v) {
+  currentView = v;
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  if (v === 'list') { document.getElementById('nav-list').classList.add('active'); showList(); }
+  if (v === 'new')  { document.getElementById('nav-new').classList.add('active'); showForm(null); }
+}
+function filterPending() {
+  currentFilter = 'pending'; currentView = 'list';
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav-pending').classList.add('active'); showList();
+}
+function updateSidebar() {
+  const p = docs.filter(d => d.status === 'pending').length;
+  const badge = document.getElementById('pending-badge');
+  badge.textContent = p; badge.style.display = p > 0 ? 'inline' : 'none';
+  document.getElementById('stat-total').textContent = docs.length;
+  document.getElementById('stat-approved').textContent = docs.filter(d => d.status === 'approved').length;
+  document.getElementById('stat-pending').textContent = p;
+  document.getElementById('stat-rejected').textContent = docs.filter(d => d.status === 'rejected').length;
+  const kb = storageSizeKB();
+  const el = document.getElementById('stat-storage');
+  if (el) { el.textContent = kb + ' KB'; el.style.color = kb > 3000 ? '#f87171' : kb > 1000 ? '#fbbf24' : '#fff'; }
+}
+
+// ── List ───────────────────────────────────────
+function showList() {
+  currentView = 'list'; searchQuery = '';
+  document.getElementById('topbar-title').textContent = '文書一覧';
+  document.getElementById('topbar-actions').innerHTML = role === 'submitter'
+    ? `<button class="btn btn-primary btn-sm" onclick="showView('new')"><svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 10-2 0v6H3a1 1 0 100 2h6v6a1 1 0 102 0v-6h6a1 1 0 100-2h-6V3z"/></svg>新規文書を作成</button>` : '';
+  document.getElementById('content').innerHTML = `
+    <div class="search-bar">
+      <svg class="search-bar-icon" width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/></svg>
+      <input id="search-input" type="text" placeholder="タイトル・内容・起案者・カテゴリで検索..." oninput="setSearch(this.value)">
+      <button class="search-bar-clear" onclick="clearSearch()">×</button>
+    </div>
+    <div id="search-meta"></div>
+    <div id="tabs-area"></div>
+    <div id="doc-list"></div>`;
+  renderList(); updateSidebar();
+}
+function renderList() {
+  const q = searchQuery.trim();
+  const counts = { all: docs.length };
+  ['draft','pending','approved','rejected'].forEach(s => { counts[s] = docs.filter(d => d.status === s).length; });
+  let filtered = currentFilter === 'all' ? docs : docs.filter(d => d.status === currentFilter);
+  if (q) filtered = filtered.filter(d => matchesSearch(d, q));
+
+  const tabsEl = document.getElementById('tabs-area');
+  if (tabsEl) tabsEl.innerHTML = `<div class="tabs" style="margin-bottom:${q?'8px':'20px'}">
+    ${[['all','全て'],['draft','下書き'],['pending','承認待ち'],['approved','承認済み'],['rejected','却下']].map(([k,l]) =>
+      `<button class="tab ${currentFilter===k?'active':''}" onclick="setFilter('${k}')">${l}<span class="tab-count">${counts[k]}</span></button>`
+    ).join('')}</div>`;
+
+  const metaEl = document.getElementById('search-meta');
+  if (metaEl) metaEl.innerHTML = q ? `<div class="search-meta">「<strong>${esc(q)}</strong>」の検索結果：${filtered.length} 件</div>` : '';
+
+  const listEl = document.getElementById('doc-list'); if (!listEl) return;
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div class="empty-state"><p>${q?'検索結果はありません':'文書がありません'}</p><small>${q?`「${esc(q)}」に一致する文書が見つかりませんでした`:role==='submitter'?'「新規文書を作成」から文書を追加しましょう':'承認待ちの文書はありません'}</small></div>`;
+    return;
+  }
+  listEl.innerHTML = filtered.slice().sort((a,b) => b.updatedAt.localeCompare(a.updatedAt)).map(d => {
+    const atCount = (d.attachments||[]).length;
+    return `<div class="doc-card" onclick="showDetail('${d.id}')">
+      <div class="doc-card-icon"><svg width="18" height="18" viewBox="0 0 20 20" fill="#6b7280"><path d="M9 2H5a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V9l-6-7zm1 1.5L14.5 9H10V3.5zM6 13h8v1H6v-1zm0-3h8v1H6v-1z"/></svg></div>
+      <div class="doc-card-body">
+        <div class="doc-card-title">${highlight(d.title, q)}</div>
+        <div class="doc-card-meta">
+          <span>📁 ${highlight(d.category, q)}</span>
+          <span>✏️ ${highlight(d.author, q)}</span>
+          <span>🕐 ${fmt(d.updatedAt)}</span>
+          ${atCount > 0 ? `<span>📎 ${atCount}件</span>` : ''}
+          ${d.approver ? `<span>👤 ${esc(d.approver)}</span>` : ''}
+        </div>
+      </div>
+      <div class="doc-card-right">
+        <span class="badge ${STATUS_BADGE[d.status]}">${STATUS_LABEL[d.status]}</span>
+        ${d.status==='pending'&&role==='approver'?'<span style="font-size:11px;color:#92400e;font-weight:600;">→ 承認が必要</span>':''}
+      </div>
+    </div>`;
+  }).join('');
+}
+function setFilter(f) { currentFilter = f; renderList(); }
+function setSearch(q) { searchQuery = q; renderList(); }
+function clearSearch() { searchQuery = ''; const i = document.getElementById('search-input'); if (i) i.value = ''; renderList(); }
+
+// ── Form ───────────────────────────────────────
+function showForm(id) {
+  if (role !== 'submitter') { toast('起案者のみ文書を作成できます', 'error'); return; }
+  editingId = id; pendingAttachments = []; removedAttachmentIds = [];
+  const d = id ? docs.find(x => x.id === id) : null;
+  currentView = 'new';
+  document.getElementById('topbar-title').textContent = d ? '文書を編集' : '新規文書を作成';
+  document.getElementById('topbar-actions').innerHTML = '';
+
+  const existingAttachHtml = d && (d.attachments||[]).length > 0
+    ? (d.attachments||[]).map(a => `
+      <div class="file-item" id="fi-ex-${a.id}">
+        <div class="file-item-icon">${fileIcon(a.type)}</div>
+        <div class="file-item-info"><div class="file-item-name">${esc(a.name)}</div><div class="file-item-size">${fmtSize(a.size)}</div></div>
+        <button class="file-item-remove" onclick="removeExistingAttachment('${id}','${a.id}')">×</button>
+      </div>`).join('') : '';
+
+  document.getElementById('content').innerHTML = `
+    <div class="form-card">
+      <div class="form-title">${d ? '文書を編集' : '新しい文書を作成'}</div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label>文書タイトル <span style="color:#dc2626">*</span></label>
+          <input id="f-title" type="text" placeholder="例: 2024年度 上期業績報告書" value="${esc(d?.title||'')}">
+        </div>
+        <div class="form-group">
+          <label>カテゴリ</label>
+          <select id="f-category">${CATEGORIES.map(c=>`<option ${(d?.category||'契約書')===c?'selected':''}>${c}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>起案者名 <span style="color:#dc2626">*</span></label>
+        <input id="f-author" type="text" placeholder="例: 山田 太郎" value="${esc(d?.author||'')}">
+      </div>
+      <div class="form-group">
+        <label>文書内容 <span style="color:#dc2626">*</span></label>
+        <textarea id="f-content" placeholder="文書の内容を入力してください...">${esc(d?.content||'')}</textarea>
+      </div>
+      <div class="form-group">
+        <label>添付ファイル</label>
+        <div class="drop-zone" id="drop-zone">
+          <input type="file" id="file-input" multiple onchange="handleFiles(this.files)">
+          <div class="drop-zone-icon">📎</div>
+          <div class="drop-zone-text">ここにドロップ、または<strong>クリックして選択</strong></div>
+          <div class="drop-zone-sub">PDF・Word・Excel・画像など ／ 1ファイル最大 5MB</div>
+        </div>
+        <div id="pending-files">${existingAttachHtml}</div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="showList()">キャンセル</button>
+        <button class="btn btn-secondary" onclick="saveDoc('draft')">下書きとして保存</button>
+        ${!d||d.status==='draft'||d.status==='rejected'?`<button class="btn btn-primary" onclick="saveDoc('pending')">承認申請する</button>`:''}
+      </div>
+    </div>`;
+
+  const zone = document.getElementById('drop-zone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); handleFiles(e.dataTransfer.files); });
+}
+
+function saveDoc(status) {
+  const title   = document.getElementById('f-title').value.trim();
+  const author  = document.getElementById('f-author').value.trim();
+  const content = document.getElementById('f-content').value.trim();
+  const category = document.getElementById('f-category').value;
+  if (!title)   { toast('タイトルを入力してください', 'error'); document.getElementById('f-title').focus(); return; }
+  if (!author)  { toast('起案者名を入力してください', 'error'); document.getElementById('f-author').focus(); return; }
+  if (!content) { toast('文書内容を入力してください', 'error'); document.getElementById('f-content').focus(); return; }
+
+  const now = new Date().toISOString();
+  if (editingId) {
+    const idx = docs.findIndex(d => d.id === editingId);
+    const existing = (docs[idx].attachments||[]).filter(a => !removedAttachmentIds.includes(a.id));
+    docs[idx] = { ...docs[idx], title, author, content, category, status, updatedAt: now,
+      attachments: [...existing, ...pendingAttachments],
+      submittedAt: status==='pending' ? now : docs[idx].submittedAt,
+      approver: null, approvedAt: null, comment: null };
+  } else {
+    docs.unshift({ id: uid(), title, author, content, category, status,
+      createdAt: now, updatedAt: now,
+      submittedAt: status==='pending' ? now : null,
+      approver: null, approvedAt: null, comment: null,
+      attachments: [...pendingAttachments] });
+  }
+
+  if (!saveWithErrorHandling()) return;
+  pendingAttachments = []; removedAttachmentIds = []; editingId = null; currentFilter = 'all';
+  toast(status==='pending' ? '承認申請しました' : '下書きを保存しました', 'success');
+  showList();
+}
+
+// ── Detail ─────────────────────────────────────
+function showDetail(id) {
+  const d = docs.find(x => x.id === id); if (!d) return;
+  currentView = 'detail';
+  document.getElementById('topbar-title').textContent = '文書詳細';
+  document.getElementById('topbar-actions').innerHTML = `<button class="btn btn-secondary btn-sm" onclick="currentFilter='all';showList()">← 一覧へ戻る</button>`;
+
+  const canEdit     = role==='submitter' && (d.status==='draft'||d.status==='rejected');
+  const canApprove  = role==='approver' && d.status==='pending';
+  const canSubmit   = role==='submitter' && d.status==='draft';
+  const canWithdraw = role==='submitter' && d.status==='pending';
+  const canDelete   = role==='submitter' && d.status!=='approved';
+  const attachments = d.attachments || [];
+
+  const attachHtml = attachments.length === 0
+    ? `<div class="attach-empty">添付ファイルはありません</div>`
+    : `<div class="attach-list">${attachments.map(a => `
+        <div class="file-item">
+          <div class="file-item-icon">${fileIcon(a.type)}</div>
+          <div class="file-item-info"><div class="file-item-name">${esc(a.name)}</div><div class="file-item-size">${fmtSize(a.size)} · ${fmt(a.uploadedAt)}</div></div>
+          <a class="file-item-download" href="${a.data}" download="${esc(a.name)}" onclick="event.stopPropagation()">⬇ ダウンロード</a>
+        </div>`).join('')}</div>`;
+
+  document.getElementById('content').innerHTML = `
+    <div class="detail-card" data-doc-id="${d.id}">
+      <div class="detail-header">
+        <div class="detail-header-left">
+          <div style="margin-bottom:8px"><span class="badge ${STATUS_BADGE[d.status]}">${STATUS_LABEL[d.status]}</span></div>
+          <div class="detail-title">${esc(d.title)}</div>
+          <div class="detail-meta">
+            <span>📁 ${esc(d.category)}</span>
+            <span>✏️ 起案者: ${esc(d.author)}</span>
+            <span>📅 作成: ${fmt(d.createdAt)}</span>
+            <span>🔄 更新: ${fmt(d.updatedAt)}</span>
+            ${d.submittedAt ? `<span>📤 申請: ${fmt(d.submittedAt)}</span>` : ''}
+            ${d.approvedAt  ? `<span>✅ 処理: ${fmt(d.approvedAt)}</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section">
+          <h4>文書内容</h4>
+          <div class="detail-content">${esc(d.content)}</div>
+        </div>
+        <div class="detail-section">
+          <h4>添付ファイル (${attachments.length}件)</h4>
+          ${attachHtml}
+        </div>
+        ${d.approver||d.comment ? `
+        <div class="detail-section">
+          <h4>承認情報</h4>
+          <div class="info-grid">
+            ${d.approver  ? `<div class="info-item"><div class="key">承認者</div><div class="val">${esc(d.approver)}</div></div>` : ''}
+            ${d.approvedAt ? `<div class="info-item"><div class="key">処理日時</div><div class="val">${fmt(d.approvedAt)}</div></div>` : ''}
+          </div>
+          ${d.comment ? `<div class="approval-comment">"${esc(d.comment)}"</div>` : ''}
+        </div>` : ''}
+        ${canApprove ? `
+        <div class="approval-box">
+          <h3>承認 / 却下</h3>
+          <div class="form-group">
+            <label>コメント（任意）</label>
+            <textarea id="approve-comment" rows="3" placeholder="承認・却下の理由やコメントを入力..."></textarea>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:4px">
+            <button class="btn btn-success" onclick="processApproval('${d.id}','approved')">✓ 承認する</button>
+            <button class="btn btn-danger"  onclick="processApproval('${d.id}','rejected')">✗ 却下する</button>
+          </div>
+        </div>` : ''}
+      </div>
+      <div class="action-bar">
+        <div class="action-bar-info">
+          ${d.status==='draft'    ? '下書き状態です。内容を確認して承認申請できます。' : ''}
+          ${d.status==='pending'  ? role==='submitter' ? '承認待ち中です。誤りがある場合は「申請を取り下げる」で下書きに戻せます。' : '承認者による処理をお待ちください。' : ''}
+          ${d.status==='approved' ? '承認済みの文書です。' : ''}
+          ${d.status==='rejected' ? '却下されました。内容を修正して再申請できます。' : ''}
+        </div>
+        <div style="display:flex;gap:8px">
+          ${canSubmit   ? `<button class="btn btn-primary btn-sm" onclick="submitForApproval('${d.id}')">📤 承認申請する</button>` : ''}
+          ${canWithdraw ? `<button class="btn btn-secondary btn-sm" style="color:#b45309" onclick="withdrawSubmission('${d.id}')">↩ 申請を取り下げる</button>` : ''}
+          ${canEdit     ? `<button class="btn btn-secondary btn-sm" onclick="showForm('${d.id}')">✏️ 編集する</button>` : ''}
+          ${canDelete   ? `<button class="btn btn-secondary btn-sm" style="color:#dc2626" onclick="confirmDelete('${d.id}')">🗑 削除</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+function withdrawSubmission(id) {
+  const d = docs.find(x => x.id === id); if (!d || d.status !== 'pending') return;
+  if (!confirm('申請を取り下げて下書きに戻しますか？')) return;
+  const now = new Date().toISOString();
+  d.status = 'draft'; d.submittedAt = null; d.updatedAt = now;
+  if (!saveWithErrorHandling()) return;
+  toast('申請を取り下げました。下書きに戻りました。', 'success');
+  showDetail(id); updateSidebar();
+}
+
+function submitForApproval(id) {
+  const d = docs.find(x => x.id === id); if (!d || d.status !== 'draft') return;
+  const now = new Date().toISOString();
+  d.status = 'pending'; d.submittedAt = now; d.updatedAt = now;
+  if (!saveWithErrorHandling()) return;
+  toast('承認申請しました', 'success'); showDetail(id); updateSidebar();
+}
+
+function processApproval(id, result) {
+  if (role !== 'approver') return;
+  const d = docs.find(x => x.id === id); if (!d || d.status !== 'pending') return;
+  const comment = (document.getElementById('approve-comment')?.value || '').trim();
+  const approverName = prompt('承認者名を入力してください', '承認者'); if (!approverName) return;
+  const now = new Date().toISOString();
+  d.status = result; d.approver = approverName; d.approvedAt = now; d.updatedAt = now; d.comment = comment || null;
+  if (!saveWithErrorHandling()) return;
+  toast(result==='approved' ? '承認しました' : '却下しました', 'success'); showDetail(id); updateSidebar();
+}
+
+function confirmDelete(id) {
+  const d = docs.find(x => x.id === id); if (!d) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay" id="confirm-modal">
+      <div class="modal">
+        <h3>文書を削除しますか？</h3>
+        <p>「${esc(d.title)}」を削除します。添付ファイルも含め、この操作は取り消せません。</p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="document.getElementById('confirm-modal').remove()">キャンセル</button>
+          <button class="btn btn-danger" onclick="deleteDoc('${id}')">削除する</button>
+        </div>
+      </div>
+    </div>`);
+}
+function deleteDoc(id) {
+  docs = docs.filter(d => d.id !== id);
+  if (!saveWithErrorHandling()) { docs = JSON.parse(localStorage.getItem('docs')||'[]'); return; }
+  document.getElementById('confirm-modal')?.remove();
+  toast('文書を削除しました', 'success'); currentFilter = 'all'; showList();
+}
+
+// ── File handling ──────────────────────────────
+function readFileAsBase64(file) {
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file); });
+}
+async function handleFiles(files) {
+  for (const file of Array.from(files)) {
+    if (file.size > MAX_FILE_SIZE) { toast(`${file.name} はサイズ超過（最大5MB）`, 'warn'); continue; }
+    const existing = [...pendingAttachments, ...(editingId ? (docs.find(d=>d.id===editingId)?.attachments||[]).filter(a=>!removedAttachmentIds.includes(a.id)) : [])];
+    if (existing.some(a => a.name === file.name)) { toast(`${file.name} は既に添付済みです`, 'warn'); continue; }
+    const id = uid();
+    appendFileItemLoading(id, file.name);
+    try {
+      const data = await readFileAsBase64(file);
+      pendingAttachments.push({ id, name: file.name, size: file.size, type: file.type, data, uploadedAt: new Date().toISOString() });
+      updateFileItem(id, { name: file.name, size: file.size, type: file.type });
+    } catch { removeFileItemFromDOM(id); toast(`${file.name} の読み込みに失敗しました`, 'error'); }
+  }
+}
+function appendFileItemLoading(id, name) {
+  const c = document.getElementById('pending-files'); if (!c) return;
+  const el = document.createElement('div'); el.className = 'file-item'; el.id = 'fi-' + id;
+  el.innerHTML = `<div class="file-item-icon">📎</div><div class="file-item-info"><div class="file-item-name">${esc(name)}</div><div class="file-item-size">読み込み中...</div></div><div class="file-item-progress"></div>`;
+  c.appendChild(el);
+}
+function updateFileItem(id, {name, size, type}) {
+  const el = document.getElementById('fi-' + id); if (!el) return;
+  el.innerHTML = `<div class="file-item-icon">${fileIcon(type)}</div><div class="file-item-info"><div class="file-item-name">${esc(name)}</div><div class="file-item-size">${fmtSize(size)}</div></div><button class="file-item-remove" onclick="removePending('${id}')">×</button>`;
+}
+function removeFileItemFromDOM(id) { document.getElementById('fi-' + id)?.remove(); }
+function removePending(id) { pendingAttachments = pendingAttachments.filter(a => a.id !== id); removeFileItemFromDOM(id); }
+function removeExistingAttachment(docId, attachId) { removedAttachmentIds.push(attachId); removeFileItemFromDOM('fi-ex-' + attachId); }
+
+// ── Toast ──────────────────────────────────────
+function toast(msg, type = 'success') {
+  const el = document.createElement('div'); el.className = `toast ${type}`;
+  el.innerHTML = (type==='success'?'✓ ':type==='warn'?'⚠ ':'✗ ') + msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ── Seed data ──────────────────────────────────
+if (docs.length === 0) {
+  const now = new Date();
+  const d = o => new Date(now - o * 86400000).toISOString();
+  docs = [
+    { id: uid(), title: '2024年度 上期業績報告書', category: '報告書', author: '田中 花子',
+      content: '2024年度上期（4月〜9月）の業績報告です。\n\n■ 売上高: 1,250百万円（前期比+12%）\n■ 営業利益: 180百万円（前期比+8%）\n■ 主要取引先との契約更新を完了し、来期に向けた体制を整備しました。',
+      status: 'approved', createdAt: d(10), updatedAt: d(3), submittedAt: d(8),
+      approver: '鈴木 部長', approvedAt: d(3), comment: '内容を確認しました。承認します。', attachments: [] },
+    { id: uid(), title: 'クラウドシステム導入に関する稟議書', category: '稟議書', author: '山田 太郎',
+      content: '標記の件について、下記のとおり稟議します。\n\n■ 目的: 業務効率化のためのクラウドERPシステム導入\n■ 導入費用: 5,000千円（初期）+ 200千円/月（ランニング）\n■ 導入予定: 2025年4月\n■ 期待効果: 処理時間30%削減、ペーパーレス化推進',
+      status: 'pending', createdAt: d(2), updatedAt: d(1), submittedAt: d(1),
+      approver: null, approvedAt: null, comment: null, attachments: [] },
+    { id: uid(), title: '第3回 新製品開発会議 議事録', category: '議事録', author: '佐藤 次郎',
+      content: '日時: 2024年10月15日 14:00〜15:30\n場所: 第1会議室\n\n【議題】\n1. 新製品コンセプトの最終確認\n2. 開発スケジュールの調整\n3. 予算配分の見直し\n\n【決定事項】\n・リリース時期を2025年6月に設定\n・開発予算を当初比10%増額することを承認',
+      status: 'draft', createdAt: d(1), updatedAt: d(0.5),
+      submittedAt: null, approver: null, approvedAt: null, comment: null, attachments: [] },
+    { id: uid(), title: '情報セキュリティポリシー改訂案', category: '規程', author: '高橋 三郎',
+      content: '情報セキュリティポリシーの改訂案です。\n\n主な改訂内容:\n1. クラウドサービス利用ガイドラインの追加\n2. テレワーク時のセキュリティ要件の明確化\n3. インシデント対応手順の見直し\n4. パスワードポリシーの強化（12文字以上必須）',
+      status: 'rejected', createdAt: d(7), updatedAt: d(4), submittedAt: d(6),
+      approver: '伊藤 部長', approvedAt: d(4), comment: '第3項の手順が不明確です。再検討の上、申請してください。', attachments: [] },
+  ];
+  save();
+}
+
+docs = docs.map(d => ({ attachments: [], ...d }));
+showList();
+</script>
+</body>
+</html>
