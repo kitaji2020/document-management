@@ -362,6 +362,7 @@ function renderList() {
       </div>
       <div class="doc-card-right">
         <span class="badge ${STATUS_BADGE[d.status]}">${STATUS_LABEL[d.status]}</span>
+        <span style="font-size:11px;color:var(--text-muted);font-weight:600;">v${d.version||1}</span>
         ${d.status==='pending'&&role==='approver'?'<span style="font-size:11px;color:#92400e;font-weight:600;">→ 承認が必要</span>':''}
       </div>
     </div>`;
@@ -451,7 +452,7 @@ function saveDoc(status) {
       approver: null, approvedAt: null, comment: null };
   } else {
     docs.unshift({ id: uid(), title, author, content, category, status,
-      createdAt: now, updatedAt: now,
+      version: 1, createdAt: now, updatedAt: now,
       submittedAt: status==='pending' ? now : null,
       approver: null, approvedAt: null, comment: null,
       attachments: [...pendingAttachments] });
@@ -470,11 +471,12 @@ function showDetail(id) {
   document.getElementById('topbar-title').textContent = '文書詳細';
   document.getElementById('topbar-actions').innerHTML = `<button class="btn btn-secondary btn-sm" onclick="currentFilter='all';showList()">← 一覧へ戻る</button>`;
 
-  const canEdit     = role==='submitter' && (d.status==='draft'||d.status==='rejected');
-  const canApprove  = role==='approver' && d.status==='pending';
-  const canSubmit   = role==='submitter' && d.status==='draft';
-  const canWithdraw = role==='submitter' && d.status==='pending';
-  const canDelete   = role==='submitter' && d.status!=='approved';
+  const canEdit      = role==='submitter' && (d.status==='draft'||d.status==='rejected');
+  const canApprove   = role==='approver' && d.status==='pending';
+  const canSubmit    = role==='submitter' && d.status==='draft';
+  const canWithdraw  = role==='submitter' && d.status==='pending';
+  const canVersionUp = role==='submitter' && d.status==='approved';
+  const canDelete    = role==='submitter' && d.status!=='approved';
   const attachments = d.attachments || [];
 
   const attachHtml = attachments.length === 0
@@ -490,7 +492,10 @@ function showDetail(id) {
     <div class="detail-card" data-doc-id="${d.id}">
       <div class="detail-header">
         <div class="detail-header-left">
-          <div style="margin-bottom:8px"><span class="badge ${STATUS_BADGE[d.status]}">${STATUS_LABEL[d.status]}</span></div>
+          <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px">
+            <span class="badge ${STATUS_BADGE[d.status]}">${STATUS_LABEL[d.status]}</span>
+            <span style="font-size:12px;font-weight:700;color:var(--text-muted);background:var(--bg);padding:2px 8px;border-radius:99px;border:1px solid var(--border)">v${d.version||1}</span>
+          </div>
           <div class="detail-title">${esc(d.title)}</div>
           <div class="detail-meta">
             <span>📁 ${esc(d.category)}</span>
@@ -537,17 +542,36 @@ function showDetail(id) {
         <div class="action-bar-info">
           ${d.status==='draft'    ? '下書き状態です。内容を確認して承認申請できます。' : ''}
           ${d.status==='pending'  ? role==='submitter' ? '承認待ち中です。誤りがある場合は「申請を取り下げる」で下書きに戻せます。' : '承認者による処理をお待ちください。' : ''}
-          ${d.status==='approved' ? '承認済みの文書です。' : ''}
+          ${d.status==='approved' ? role==='submitter' ? '承認済みです。内容を改訂する場合は「バージョンアップして新規作成」で新しい下書きを作れます。' : '承認済みの文書です。' : ''}
           ${d.status==='rejected' ? '却下されました。内容を修正して再申請できます。' : ''}
         </div>
         <div style="display:flex;gap:8px">
-          ${canSubmit   ? `<button class="btn btn-primary btn-sm" onclick="submitForApproval('${d.id}')">📤 承認申請する</button>` : ''}
-          ${canWithdraw ? `<button class="btn btn-secondary btn-sm" style="color:#b45309" onclick="withdrawSubmission('${d.id}')">↩ 申請を取り下げる</button>` : ''}
-          ${canEdit     ? `<button class="btn btn-secondary btn-sm" onclick="showForm('${d.id}')">✏️ 編集する</button>` : ''}
-          ${canDelete   ? `<button class="btn btn-secondary btn-sm" style="color:#dc2626" onclick="confirmDelete('${d.id}')">🗑 削除</button>` : ''}
+          ${canSubmit    ? `<button class="btn btn-primary btn-sm" onclick="submitForApproval('${d.id}')">📤 承認申請する</button>` : ''}
+          ${canWithdraw  ? `<button class="btn btn-secondary btn-sm" style="color:#b45309" onclick="withdrawSubmission('${d.id}')">↩ 申請を取り下げる</button>` : ''}
+          ${canVersionUp ? `<button class="btn btn-secondary btn-sm" style="color:#2563eb" onclick="versionUp('${d.id}')">⬆ バージョンアップして新規作成</button>` : ''}
+          ${canEdit      ? `<button class="btn btn-secondary btn-sm" onclick="showForm('${d.id}')">✏️ 編集する</button>` : ''}
+          ${canDelete    ? `<button class="btn btn-secondary btn-sm" style="color:#dc2626" onclick="confirmDelete('${d.id}')">🗑 削除</button>` : ''}
         </div>
       </div>
     </div>`;
+}
+
+function versionUp(id) {
+  const src = docs.find(x => x.id === id); if (!src || src.status !== 'approved') return;
+  const nextVer = (src.version || 1) + 1;
+  if (!confirm(`v${nextVer} の下書きを新規作成します。元の承認済み文書はそのまま残ります。`)) return;
+  const now = new Date().toISOString();
+  const newDoc = {
+    id: uid(), title: src.title, category: src.category, author: src.author,
+    content: src.content, status: 'draft', version: nextVer,
+    createdAt: now, updatedAt: now,
+    submittedAt: null, approver: null, approvedAt: null, comment: null,
+    attachments: src.attachments.map(a => ({ ...a, id: uid(), uploadedAt: now }))
+  };
+  docs.unshift(newDoc);
+  if (!saveWithErrorHandling()) { docs.shift(); return; }
+  toast(`v${nextVer} の下書きを作成しました`, 'success');
+  currentFilter = 'all'; showDetail(newDoc.id); updateSidebar();
 }
 
 function withdrawSubmission(id) {
@@ -665,7 +689,7 @@ if (docs.length === 0) {
   save();
 }
 
-docs = docs.map(d => ({ attachments: [], ...d }));
+docs = docs.map(d => ({ attachments: [], version: 1, ...d }));
 showList();
 </script>
 </body>
